@@ -11,12 +11,17 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-
+# Terraform
+*.tfstate
+*.tfstate.*
 crash.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
 
 # IDE
 .vscode/
@@ -45,6 +50,4 @@ secrets/
 *.pem
 *.key
 credentials.json
-
 BLOG.md
-
