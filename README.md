@@ -1,162 +1,151 @@
-# Cloud-Native Inventory Management System
+﻿# Cloud-Native Inventory Management System
 
-A production-grade, highly available inventory management application built with modern DevOps practices and deployed on AWS.
+Full-stack inventory management application built with React, Node.js, and MySQL, deployed on AWS EKS with Kubernetes.
 
-## Project Overview
+## Tech Stack
 
-This is a full-stack inventory management system that allows businesses to track products, manage stock levels, and monitor inventory across multiple warehouses. The application demonstrates enterprise-grade architecture patterns and cloud-native deployment strategies.
-
-## Architecture
-
-### Application Components
-- **Frontend**: React.js SPA with Material-UI
-- **Backend**: Node.js REST API with Express
-- **Database**: AWS RDS Aurora MySQL (Multi-AZ)
-- **Container Orchestration**: Amazon EKS
-
-### AWS Services Used
-- **Amazon EKS** - Managed Kubernetes cluster
-- **Amazon RDS Aurora MySQL** - Highly available database
-- **Amazon VPC** - Network isolation
-- **Elastic Load Balancer** - Traffic distribution
-- **Amazon ECR** - Container registry
-- **AWS Secrets Manager** - Credentials management
+- **Frontend**: React 18, Material-UI, Nginx
+- **Backend**: Node.js, Express, MySQL2
+- **Database**: MySQL 8.0
+- **Infrastructure**: Docker, Kubernetes, Terraform
+- **Cloud**: AWS (EKS, ECR, VPC, ALB)
+- **CI/CD**: GitHub Actions
 
 ## Features
 
-### Inventory Management
-- Add, update, and delete products
-- Track stock levels across multiple warehouses
-- Low stock alerts and notifications
-- Product categorization and search
-- Bulk import/export capabilities
+- Product, Category, and Warehouse management
+- RESTful API with CRUD operations
+- Auto-scaling (CPU-based)
+- Multi-AZ deployment
+- Persistent storage
 
-### User Management
-- Role-based access control (Admin, Manager, Staff)
-- User authentication and authorization
-- Audit logging for all operations
+## Project Structure
+
+```
+CloudNative-Application/
+├── backend/              # Node.js API
+│   ├── src/
+│   │   ├── routes/       # API endpoints
+│   │   ├── models/       # Database models
+│   │   └── config/       # Configuration
+│   └── Dockerfile
+├── frontend/             # React app
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── services/
+│   └── Dockerfile
+├── database/             # MySQL schemas
+├── k8s/                  # Kubernetes manifests
+├── terraform/            # Infrastructure as Code
+└── docker-compose.yml    # Local development
+```
 
 ## Getting Started
 
-### Prerequisites
-- Docker & Docker Compose
-- Node.js >= 18
-- Git
-- (Optional for EKS) `kubectl`, `eksctl`, `aws` CLI
-
 ### Local Development
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/GitHer-Muna/CloudNative-Application.git
-   cd CloudNative-Application
-   ```
+**Prerequisites**: Docker Desktop, Docker Compose
 
-2. **Run backend locally**
-   ```bash
-   cd backend
-   npm install
-   npm run dev
-   ```
-
-3. **Run frontend locally**
-   ```bash
-   cd frontend
-   npm install --legacy-peer-deps
-   npm start
-   ```
-
-4. **Run locally with Docker Compose** (recommended for dev)
-
-   This starts MySQL (with schema and seed data), the backend (with hot-reload) and the frontend in dev mode.
-
-   ```bash
-   # from repository root
-   docker compose up -d --build
-
-   # check services
-   docker compose ps
-
-   # verify backend health
-   curl http://localhost:5000/health
-   ```
-
-   Useful tips:
-   - Dev DB mapping: host port **3307** -> container port **3306**.
-   - Dev DB credentials (compose): `inventory_user` / `inventory_pass` (DB: `inventory_db`) — **development only**.
-   - To stop & remove containers and volumes: `docker compose down -v`.
-   - If the DB volume exists, schema/seed SQL in `database/` will not be re-run unless you remove the volume.
-
-   For API root: use `/health` or `/api/*`. The server returns `404` for `/` by design (API-only), but an index is also available at `/`.
-
-### Application Deployment
-
-Deployment is managed using three consolidated scripts in the `scripts/` folder:
-
-- `scripts/install.sh` — checks for required CLI tools (`aws`, `eksctl`, `kubectl`, `docker`, `helm`) and can attempt to install missing tools (use `--yes` to auto-install).
-- `scripts/deploy.sh` — builds images, pushes them to your registry, optionally creates an EKS cluster, and applies Kubernetes manifests. It supports a safe `--dry-run` mode.
-- `scripts/delete.sh` — safe teardown helpers for deleting a namespace and/or EKS cluster (`--namespace`, `--cluster`, `--all`). Use `--yes` to skip interactive confirmation.
-
-Quick examples:
-
-Build and push images (to ECR) and apply manifests (dry-run):
 ```bash
-REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo TAG=ci123 ./scripts/deploy.sh --dry-run --build --push --apply
+git clone <your-repo-url>
+cd CloudNative-Application
+docker compose up --build
 ```
 
-Create cluster, build, push, and apply (dry-run):
+Access:
+- Frontend: http://localhost:3000
+- Backend: http://localhost:5000
+- Database: localhost:3307
+
+## AWS Deployment (Automated)
+
+### One-Time Setup
+
+**Prerequisites**: AWS CLI configured, Terraform v1.5+
+
+1. **Provision Infrastructure**
 ```bash
-REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo TAG=ci123 ./scripts/deploy.sh --dry-run --cluster-create --build --push --apply
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your AWS details
+terraform init && terraform apply
 ```
 
-Real run (replace REGISTRY/TAG with your values):
+2. **Configure GitHub Secrets**
+
+Add these secrets to your GitHub repository settings:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+3. **Deploy Application**
 ```bash
-REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo TAG=1.0.0 ./scripts/deploy.sh --cluster-create --build --push --apply
+git push origin main
 ```
 
-Notes & best practices:
-- Ensure your ECR repository exists and you are authenticated (`aws ecr get-login-password ... | docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com`).
-- Manage production secrets via AWS Secrets Manager and inject them into Kubernetes via ExternalSecrets or a secure CI pipeline.
-- The orchestration scripts avoid destructive changes by default; use `--dry-run` to validate flows before running for real.
+GitHub Actions will automatically:
+- Build Docker images
+- Push to Amazon ECR
+- Deploy to Kubernetes
+- Configure auto-scaling
 
-Notes & best practices:
-- Use **immutable image tags** (timestamp or commit SHA) in production.
-- Store production secrets in **AWS Secrets Manager** and inject into k8s via ExternalSecrets or CI.
-- Ensure RDS is in a network accessible from EKS (VPC/subnet & security group rules).
+**Deployment time**: ~5-7 minutes after push
 
----
+### Access Your Application
+```bash
+kubectl get svc frontend-service -n inventory-system
+# Use the EXTERNAL-IP from the output
+```
 
-## CI/CD Pipeline (if you decide to add)
-- Build (unit tests + lint)
-- Build and push Docker images to ECR
-- Deploy to Kubernetes (kubectl / helm)
-- Run integration / smoke tests and health checks
+## Useful Commands
 
-If you prefer I can add a GitHub Actions workflow to automate the above (no Terraform changes required).
+**Local Development**
+```bash
+docker compose up -d              # Start in background
+docker compose logs -f backend    # View logs
+docker compose down -v            # Stop and remove
+```
 
-## Monitoring & Logging
+**Kubernetes**
+```bash
+kubectl get pods -n inventory-system                    # Pod status
+kubectl logs -f deployment/backend -n inventory-system  # View logs
+kubectl get hpa -n inventory-system                     # Autoscaling status
+kubectl scale deployment backend --replicas=3 -n inventory-system
+```
 
-- **Application Logs**: CloudWatch Logs
-- **Metrics**: CloudWatch Metrics
-- **Container Insights**: EKS monitoring
-- **Database Monitoring**: RDS Performance Insights
+**Terraform**
+```bash
+terraform plan      # Preview changes
+terraform apply     # Apply changes
+terraform destroy   # Remove infrastructure
+```
 
-## Security
+## CI/CD Pipeline
 
-- Network isolation using VPC
-- Private subnets for databases
-- Security groups with least privilege
-- Secrets stored in AWS Secrets Manager
-- HTTPS/TLS encryption
-- Regular security scanning of container images
+The project uses GitHub Actions for automated deployment:
 
-## Cost Optimization
+**Workflow**:
+1. Push code to `main` branch
+2. Build workflow runs automatically
+3. Docker images built and pushed to ECR
+4. Deploy workflow triggers on successful build
+5. Application deployed to Kubernetes with zero downtime
 
-- Auto-scaling for EKS nodes
-- RDS Aurora with read replicas
-- Spot instances for non-critical workloads
-- Resource tagging for cost allocation
+**Manual trigger**: Go to Actions tab → Select workflow → Run workflow
 
-## Contributing
+## Cleanup
 
-This is a portfolio project for demonstrating DevOps capabilities. For questions or discussions, please open an issue.
+```bash
+# Delete Kubernetes resources first (removes LoadBalancers and EBS volumes)
+kubectl delete namespace inventory-system
+
+# Destroy all AWS infrastructure (including ECR repositories)
+cd terraform
+terraform destroy
+```
+
+## License
+
+MIT License
+
