@@ -1,0 +1,90 @@
+name: Build and Push Images
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR repository URLs
+        id: ecr-repos
+        run: |
+          BACKEND_REPO=$(aws ecr describe-repositories --repository-names inventory-app/backend --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "")
+          FRONTEND_REPO=$(aws ecr describe-repositories --repository-names inventory-app/frontend --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$BACKEND_REPO" ] || [ -z "$FRONTEND_REPO" ]; then
+            echo "Error: ECR repositories not found. Please run terraform apply first."
+            exit 1
+          fi
+          
+          echo "backend-repo=$BACKEND_REPO" >> $GITHUB_OUTPUT
+          echo "frontend-repo=$FRONTEND_REPO" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: image-tag
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "tag=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          fi
+          echo "sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Build backend image
+        working-directory: ./backend
+        run: |
+          docker build -t ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.tag }} .
+          docker tag ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.tag }} \
+                     ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.sha }}
+
+      - name: Build frontend image
+        working-directory: ./frontend
+        run: |
+          docker build -t ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.tag }} .
+          docker tag ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.tag }} \
+                     ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.sha }}
+
+      - name: Push backend image
+        run: |
+          docker push ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.tag }}
+          docker push ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.sha }}
+
+      - name: Push frontend image
+        run: |
+          docker push ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.tag }}
+          docker push ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.sha }}
+
+      - name: Output image tags
+        run: |
+          echo "Backend: ${{ steps.ecr-repos.outputs.backend-repo }}:${{ steps.image-tag.outputs.tag }}"
+          echo "Frontend: ${{ steps.ecr-repos.outputs.frontend-repo }}:${{ steps.image-tag.outputs.tag }}"
+          echo "SHA: ${{ steps.image-tag.outputs.sha }}"

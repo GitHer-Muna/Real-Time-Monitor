@@ -1,0 +1,139 @@
+name: Deploy to EKS
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Images"]
+    branches: [main]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: inventory-eks-cluster
+  NAMESPACE: inventory-system
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    # Only run if build workflow succeeded or manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Get ECR repository URLs
+        id: ecr-repos
+        run: |
+          BACKEND_REPO=$(aws ecr describe-repositories --repository-names inventory-app/backend --query 'repositories[0].repositoryUri' --output text)
+          FRONTEND_REPO=$(aws ecr describe-repositories --repository-names inventory-app/frontend --query 'repositories[0].repositoryUri' --output text)
+          
+          echo "backend-repo=$BACKEND_REPO" >> $GITHUB_OUTPUT
+          echo "frontend-repo=$FRONTEND_REPO" >> $GITHUB_OUTPUT
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create secrets
+        run: |
+          # Create database secrets
+          kubectl create secret generic backend-secrets \
+            --from-literal=DB_HOST=mysql-service \
+            --from-literal=DB_PORT=3306 \
+            --from-literal=DB_USER=inventory_user \
+            --from-literal=DB_PASSWORD=inventory_pass \
+            --from-literal=DB_NAME=inventory_db \
+            --from-literal=JWT_SECRET=production_jwt_secret_change_this \
+            --from-literal=NODE_ENV=production \
+            --namespace=${{ env.NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Update deployment manifests
+        run: |
+          # Update backend deployment
+          sed -i "s|REPLACE_REGISTRY/backend:REPLACE_TAG|${{ steps.ecr-repos.outputs.backend-repo }}:latest|g" k8s/backend/deployment.yaml
+          
+          # Update frontend deployment
+          sed -i "s|REPLACE_REGISTRY/frontend:REPLACE_TAG|${{ steps.ecr-repos.outputs.frontend-repo }}:latest|g" k8s/frontend/deployment.yaml
+
+      - name: Deploy database
+        run: |
+          kubectl apply -f k8s/database/mysql-deployment.yaml -n ${{ env.NAMESPACE }}
+          
+          # Wait for MySQL to be ready
+          echo "Waiting for MySQL to be ready..."
+          kubectl wait --for=condition=ready pod -l app=mysql -n ${{ env.NAMESPACE }} --timeout=300s || true
+
+      - name: Deploy backend
+        run: |
+          kubectl apply -f k8s/backend/deployment.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/backend/hpa.yaml -n ${{ env.NAMESPACE }}
+          
+          # Wait for backend to be ready
+          echo "Waiting for backend to be ready..."
+          kubectl rollout status deployment/backend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Deploy frontend
+        run: |
+          kubectl apply -f k8s/frontend/configmap.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/frontend/deployment.yaml -n ${{ env.NAMESPACE }}
+          kubectl apply -f k8s/frontend/hpa.yaml -n ${{ env.NAMESPACE }}
+          
+          # Wait for frontend to be ready
+          echo "Waiting for frontend to be ready..."
+          kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Get service URL
+        run: |
+          echo "Waiting for LoadBalancer to be ready..."
+          sleep 30
+          
+          FRONTEND_URL=$(kubectl get svc frontend-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          
+          if [ -z "$FRONTEND_URL" ]; then
+            echo "LoadBalancer URL not ready yet. Check status with:"
+            echo "kubectl get svc frontend-service -n ${{ env.NAMESPACE }}"
+          else
+            echo "Application deployed successfully!"
+            echo "Frontend URL: http://$FRONTEND_URL"
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** ${{ env.NAMESPACE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ env.CLUSTER_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Pods" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n ${{ env.NAMESPACE }} >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Services" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          kubectl get svc -n ${{ env.NAMESPACE }} >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
