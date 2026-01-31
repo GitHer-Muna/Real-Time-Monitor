@@ -22,7 +22,7 @@ Full-stack inventory management application built with React, Node.js, and MySQL
 ## Project Structure
 
 ```
-CloudNative-Application/
+Full-Stack-Application-Deployment-on-AWS-EKS/
 ├── backend/              # Node.js API
 │   ├── src/
 │   │   ├── routes/       # API endpoints
@@ -49,7 +49,7 @@ CloudNative-Application/
 
 ```bash
 git clone <your-repo-url>
-cd CloudNative-Application
+cd Full-Stack-Application-Deployment-on-AWS-EKS
 docker compose up --build
 ```
 
