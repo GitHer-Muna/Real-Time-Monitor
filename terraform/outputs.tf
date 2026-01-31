@@ -56,17 +56,6 @@ output "github_actions_secret_access_key" {
   sensitive   = true
 }
 
-# RDS outputs (if enabled)
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = var.enable_rds ? aws_db_instance.mysql[0].endpoint : "RDS not enabled"
-}
-
-output "rds_database_name" {
-  description = "RDS database name"
-  value       = var.enable_rds ? aws_db_instance.mysql[0].db_name : "RDS not enabled"
-}
-
 # Configure kubectl
 output "configure_kubectl" {
   description = "Command to configure kubectl"

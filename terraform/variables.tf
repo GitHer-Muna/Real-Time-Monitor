@@ -58,18 +58,6 @@ variable "node_max_size" {
   default     = 4
 }
 
-variable "enable_rds" {
-  description = "Enable RDS MySQL database (set false to use in-cluster MySQL)"
-  type        = bool
-  default     = false
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
 variable "db_name" {
   description = "Database name"
   type        = string

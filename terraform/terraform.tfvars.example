@@ -18,16 +18,6 @@ node_desired_size = 2
 node_min_size = 1
 node_max_size = 4
 
-# RDS Configuration (optional)
-# Set to true to use AWS RDS instead of MySQL in Kubernetes
-enable_rds = false
-
-# If enable_rds = true, configure below:
-# db_instance_class = "db.t3.micro"
-# db_name = "inventory_db"
-# db_username = "admin"
-# db_password = "YourSecurePassword123!" # Use AWS Secrets Manager in production
-
 # Additional tags
 tags = {
   Owner = "YourName"
