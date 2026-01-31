@@ -1,151 +1,193 @@
-﻿# Cloud-Native Inventory Management System
+﻿# Real-Time Application Monitoring
 
-Full-stack inventory management application built with React, Node.js, and MySQL, deployed on AWS EKS with Kubernetes.
+A monitoring solution for cloud-native applications using Prometheus and Grafana. This project collects metrics from a Node.js backend API and displays them on dashboards.
 
-## Tech Stack
+## What This Does
 
-- **Frontend**: React 18, Material-UI, Nginx
-- **Backend**: Node.js, Express, MySQL2
-- **Database**: MySQL 8.0
-- **Infrastructure**: Docker, Kubernetes, Terraform
-- **Cloud**: AWS (EKS, ECR, VPC, ALB)
-- **CI/CD**: GitHub Actions
+This monitoring setup tracks application performance and health:
 
-## Features
+- HTTP request rate and response times
+- Error tracking for failed requests
+- CPU and memory usage
+- Active connections to the server
+- Real-time visualization of all metrics
 
-- Product, Category, and Warehouse management
-- RESTful API with CRUD operations
-- Auto-scaling (CPU-based)
-- Multi-AZ deployment
-- Persistent storage
+## Technologies Used
 
-## Project Structure
+- Prometheus - collects and stores metrics
+- Grafana - creates visual dashboards
+- prom-client - Node.js metrics library
+- Docker Compose - local development
+- Kubernetes - production deployment
+
+## Project Files
 
 ```
-Full-Stack-Application-Deployment-on-AWS-EKS/
-├── backend/              # Node.js API
+Real-Time-Monitor/
+├── backend/
 │   ├── src/
-│   │   ├── routes/       # API endpoints
-│   │   ├── models/       # Database models
-│   │   └── config/       # Configuration
-│   └── Dockerfile
-├── frontend/             # React app
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   └── services/
-│   └── Dockerfile
-├── database/             # MySQL schemas
-├── k8s/                  # Kubernetes manifests
-├── terraform/            # Infrastructure as Code
-└── docker-compose.yml    # Local development
+│   │   ├── config/metrics.js          # metrics configuration
+│   │   └── middleware/metrics.js      # collect request data
+│   └── package.json                   # added prom-client
+├── k8s/
+│   └── monitoring/
+│       ├── prometheus/                # kubernetes configs
+│       └── grafana/                   # kubernetes configs
+├── monitoring/
+│   ├── prometheus.yml                 # prometheus setup
+│   └── grafana/                       # dashboard configs
+├── docker-compose.yml                 # local testing
+└── MONITORING.md                      # detailed guide
 ```
 
-## Getting Started
+## How to Use
 
-### Local Development
+### Local Setup with Docker
 
-**Prerequisites**: Docker Desktop, Docker Compose
+Start all monitoring services:
 
 ```bash
-git clone <your-repo-url>
-cd Full-Stack-Application-Deployment-on-AWS-EKS
-docker compose up --build
+docker-compose up -d
 ```
 
-Access:
-- Frontend: http://localhost:3000
-- Backend: http://localhost:5000
-- Database: localhost:3307
+Access the dashboards:
 
-## AWS Deployment (Automated)
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001
+- Metrics endpoint: http://localhost:5000/metrics
 
-### One-Time Setup
+Login to Grafana with username `admin` and password `admin`.
 
-**Prerequisites**: AWS CLI configured, Terraform v1.5+
+### Testing
 
-1. **Provision Infrastructure**
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your AWS details
-terraform init && terraform apply
-```
-
-2. **Configure GitHub Secrets**
-
-Add these secrets to your GitHub repository settings:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-
-3. **Deploy Application**
-```bash
-git push origin main
-```
-
-GitHub Actions will automatically:
-- Build Docker images
-- Push to Amazon ECR
-- Deploy to Kubernetes
-- Configure auto-scaling
-
-**Deployment time**: ~5-7 minutes after push
-
-### Access Your Application
-```bash
-kubectl get svc frontend-service -n inventory-system
-# Use the EXTERNAL-IP from the output
-```
-
-## Useful Commands
-
-**Local Development**
-```bash
-docker compose up -d              # Start in background
-docker compose logs -f backend    # View logs
-docker compose down -v            # Stop and remove
-```
-
-**Kubernetes**
-```bash
-kubectl get pods -n inventory-system                    # Pod status
-kubectl logs -f deployment/backend -n inventory-system  # View logs
-kubectl get hpa -n inventory-system                     # Autoscaling status
-kubectl scale deployment backend --replicas=3 -n inventory-system
-```
-
-**Terraform**
-```bash
-terraform plan      # Preview changes
-terraform apply     # Apply changes
-terraform destroy   # Remove infrastructure
-```
-
-## CI/CD Pipeline
-
-The project uses GitHub Actions for automated deployment:
-
-**Workflow**:
-1. Push code to `main` branch
-2. Build workflow runs automatically
-3. Docker images built and pushed to ECR
-4. Deploy workflow triggers on successful build
-5. Application deployed to Kubernetes with zero downtime
-
-**Manual trigger**: Go to Actions tab → Select workflow → Run workflow
-
-## Cleanup
+Generate some traffic to see metrics:
 
 ```bash
-# Delete Kubernetes resources first (removes LoadBalancers and EBS volumes)
-kubectl delete namespace inventory-system
-
-# Destroy all AWS infrastructure (including ECR repositories)
-cd terraform
-terraform destroy
+curl http://localhost:5000/health
+curl http://localhost:5000/api/products
+curl http://localhost:5000/api/categories
 ```
+
+Then check the Grafana dashboard to see request rates, response times, and resource usage.
+
+### Kubernetes Deployment
+
+Deploy Prometheus:
+
+```bash
+kubectl apply -f k8s/monitoring/prometheus/
+```
+
+Deploy Grafana:
+
+```bash
+kubectl apply -f k8s/monitoring/grafana/
+```
+
+Access via port-forward:
+
+```bash
+kubectl port-forward -n cloudnative-app svc/grafana 3001:3001
+kubectl port-forward -n cloudnative-app svc/prometheus 9090:9090
+```
+
+## Metrics Collected
+
+The backend exposes these metrics:
+
+- http_requests_total - count of all HTTP requests
+- http_request_duration_seconds - how long requests take
+- active_connections - current connections
+- process_cpu_seconds_total - CPU usage
+- process_resident_memory_bytes - memory usage
+
+## Dashboard Features
+
+The Grafana dashboard shows:
+
+- Request rate graph over time
+- Average response time
+- Total request count
+- Error rate for 5xx responses
+- Active connection count
+- CPU usage graph
+- Memory usage graph
+
+All graphs update every 5 seconds.
+
+## Configuration
+
+Prometheus scrapes metrics from the backend every 15 seconds. You can change this in `prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 15s
+```
+
+The backend metrics endpoint is at `/metrics` and returns data in Prometheus format.
+
+## Troubleshooting
+
+If metrics are not showing:
+
+1. Check if the backend is running
+2. Visit http://localhost:5000/metrics to see raw data
+3. Check Prometheus targets at http://localhost:9090/targets
+4. Make sure all services are up with `docker-compose ps`
+
+If Grafana shows no data:
+
+1. Check the datasource connection in Grafana settings
+2. Verify the time range is set to last 15 minutes
+3. Click the refresh button on the dashboard
+
+## Stop Services
+
+Stop everything:
+
+```bash
+docker-compose down
+```
+
+Remove all data:
+
+```bash
+docker-compose down -v
+```
+
+## What I Learned
+
+Working on this project taught me:
+
+- How to add metrics to a Node.js application
+- Setting up Prometheus for metric collection
+- Creating Grafana dashboards
+- Deploying monitoring tools on Kubernetes
+- Understanding application observability
+
+## Future Improvements
+
+Things to add later:
+
+- Email alerts when errors happen
+- More detailed database query metrics
+- Log aggregation with ELK stack
+- Distributed tracing
+- Custom business metrics
+
+## Requirements
+
+To run this project you need:
+
+- Docker and Docker Compose
+- Node.js 18 or higher (for local development)
+- Kubernetes cluster (for production)
+- kubectl configured
+
+## Related Project
+
+This monitoring setup is built for my cloud-native inventory management application. The main project is at [CloudNative-Application](https://github.com/GitHer-Muna/CloudNative-Application).
 
 ## License
 
-MIT License
-
+MIT
