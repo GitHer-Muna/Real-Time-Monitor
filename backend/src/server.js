@@ -10,6 +10,8 @@ const warehouseRoutes = require('./routes/warehouses');
 const userRoutes = require('./routes/users');
 const logger = require('./config/logger');
 const { errorHandler } = require('./middleware/errorHandler');
+const { metricsMiddleware } = require('./middleware/metrics');
+const { register } = require('./config/metrics');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +22,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
+
+// Metrics middleware
+app.use(metricsMiddleware);
+
+// Metrics endpoint for Prometheus
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
