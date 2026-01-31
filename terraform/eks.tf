@@ -16,7 +16,7 @@ module "eks" {
   # EKS Managed Node Group
   eks_managed_node_groups = {
     main = {
-      name           = "${var.project_name}-node-group"
+      name           = "${var.project_name}-nodes"
       instance_types = var.node_instance_types
 
       min_size     = var.node_min_size

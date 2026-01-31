@@ -8,7 +8,7 @@ module "vpc" {
 
   azs             = data.aws_availability_zones.available.names
   private_subnets = [for k, v in data.aws_availability_zones.available.names : cidrsubnet(var.vpc_cidr, 4, k)]
-  public_subnets  = [for k, v in data.aws_availability_zones.available.names : cidrsubnet(var.vpc_cidr, 8, k + 48)]
+  public_subnets  = [for k, v in data.aws_availability_zones.available.names : cidrsubnet(var.vpc_cidr, 8, k + 100)]
 
   enable_nat_gateway   = true
   single_nat_gateway   = var.environment != "prod" # Use single NAT for cost savings in dev
@@ -42,4 +42,7 @@ data "aws_availability_zones" "available" {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
   }
+  
+  # Exclude us-east-1e (not supported by EKS)
+  exclude_names = ["us-east-1e"]
 }

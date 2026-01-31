@@ -1,0 +1,37 @@
+cp terraform.tfvars.example terraform.tfvars
+nano terraform.tfvars# Copy this file to terraform.tfvars and customize
+
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "dev"
+project_name = "inventory-app"
+
+# EKS Cluster Configuration
+cluster_name = "inventory-eks-cluster"
+cluster_version = "1.28"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# EKS Node Group Configuration
+node_instance_types = ["t3.medium"]
+node_desired_size = 2
+node_min_size = 1
+node_max_size = 4
+
+# RDS Configuration (optional)
+# Set to true to use AWS RDS instead of MySQL in Kubernetes
+enable_rds = false
+
+# If enable_rds = true, configure below:
+# db_instance_class = "db.t3.micro"
+# db_name = "inventory_db"
+# db_username = "admin"
+# db_password = "YourSecurePassword123!" # Use AWS Secrets Manager in production
+
+# Additional tags
+tags = {
+  Owner = "YourName"
+  Team = "DevOps"
+  CostCenter = "Engineering"
+}
